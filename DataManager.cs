@@ -35,19 +35,12 @@ namespace Jwpro.Api.Proxy
             }
         }
 
-        private SalesForceConfiguration getDefaultConfig()
-        {
-            var path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            return JsonConvert.DeserializeObject<SalesForceConfiguration>(
-                File.ReadAllText($@"{path}\salesForceConfig.json"));
-        }
-
-        private string getProviderBaseQuery()
+        private string getAccountBaseQuery()
         {
             StringBuilder query = new StringBuilder($"{_config.ApiUrl}query?q=SELECT");
-            PropertyInfo[] providerProperties = typeof(Provider).GetProperties();
+            PropertyInfo[] accountProperties = typeof(Account).GetProperties();
             int count = 0;
-            foreach(PropertyInfo property in providerProperties)
+            foreach(PropertyInfo property in accountProperties)
             {
                 if(property.Name.ToLower() != "attributes")
                 {
@@ -78,6 +71,13 @@ namespace Jwpro.Api.Proxy
             return query.ToString();
         }
 
+        private SalesForceConfiguration getDefaultConfig()
+        {
+            var path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            return JsonConvert.DeserializeObject<SalesForceConfiguration>(
+                File.ReadAllText($@"{path}\salesForceConfig.json"));
+        }
+
         public string AddTask(Task task)
         {
             if(string.IsNullOrEmpty(_token))
@@ -104,36 +104,36 @@ namespace Jwpro.Api.Proxy
             return null;
         }
 
-        public Provider GetProvider(string npi, string upin, string firstName, string lastName)
+        public Account GetAccount(string filter = null, string firstName = null, string lastName = null)
         {
             if(string.IsNullOrEmpty(_token))
                 authenticate();
 
-            Provider provider = null;
-            string query = getProviderBaseQuery();
+            Account account = null;
+            string query = getAccountBaseQuery();
 
             try
             {
-                if(!string.IsNullOrEmpty(npi))
+                if(!string.IsNullOrEmpty(filter))
                 {
-                    string url = $"{query}+WHERE+npi__C='{npi}'+OR+upin__C='{upin}'";
+                    string url = $"{query}WHERE{filter}";
                     var response = url.GetJsonFromUrl(requestFilter: req => req.AddBearerToken(_token))
-                        .FromJson<ApiQueryResponse<Provider>>();
+                        .FromJson<ApiQueryResponse<Account>>();
 
                     if(response != null && response.TotalSize == 1)
                     {
-                        provider = response.Records[0];
+                        account = response.Records[0];
                     }
                 }
-                if(provider == null && !string.IsNullOrEmpty(firstName) && !string.IsNullOrEmpty(lastName))
+                if(account == null && !string.IsNullOrEmpty(firstName) && !string.IsNullOrEmpty(lastName))
                 {
                     string url = $"{query}+WHERE+FirstName='{firstName}' AND lastName='{lastName}'";
                     var response = url.GetJsonFromUrl(requestFilter: req => req.AddBearerToken(_token))
-                        .FromJson<ApiQueryResponse<Provider>>();
+                        .FromJson<ApiQueryResponse<Account>>();
 
                     if(response != null && response.TotalSize == 1)
                     {
-                        provider = response.Records[0];
+                        account = response.Records[0];
                     }
                 }
             } catch(Exception ex)
@@ -141,23 +141,25 @@ namespace Jwpro.Api.Proxy
                 throw new InvalidOperationException("Error Getting Provider", ex);
             }
 
-            return provider;
+            return account;
         }
 
-        public IEnumerable<Provider> GetProviders()
+        public IEnumerable<Account> GetAccounts(string filter = null)
         {
             if(string.IsNullOrEmpty(_token))
                 authenticate();
 
             try
             {
-                var response = getProviderBaseQuery()
-                    .GetJsonFromUrl(requestFilter: req => req.AddBearerToken(_token))
-                    .FromJson<ApiQueryResponse<Provider>>();
+                var url = getAccountBaseQuery();
+                if(!string.IsNullOrWhiteSpace(filter))
+                    url = $"{url}WHERE{filter}";
+                var response = url.GetJsonFromUrl(requestFilter: req => req.AddBearerToken(_token))
+                    .FromJson<ApiQueryResponse<Account>>();
                 return response.Records;
             } catch(Exception ex)
             {
-                throw new InvalidOperationException("Error Getting Sales Force Providers", ex);
+                throw new InvalidOperationException("Error Getting Salesforce Accounts", ex);
             }
         }
     }
